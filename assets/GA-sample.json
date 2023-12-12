@@ -1,0 +1,89 @@
+
+{
+    "x-ga-protocol_version": "2",
+    "x-ga-measurement_id": "G-xxxx",
+    "x-ga-gtm_version": "45je3bt0v9172295918",
+    "x-ga-page_id": "1701897643244",
+    "x-ga-mp2-gcd": "11l1l1l1l1",
+    "x-ga-dma": "0",
+    "x-ga-gdid": "dYzMzMD",
+    "client_id": "xxxxx.xxxx",
+    "language": "en-us",
+    "screen_resolution": "1440x900",
+    "event_location": {
+        "country": "US",
+        "region": "WA"
+    },
+    "client_hints": {
+        "architecture": "arm",
+        "bitness": "64",
+        "full_version_list": [
+            {
+                "brand": "Chromium",
+                "version": "118.0.5993.70"
+            },
+            {
+                "brand": "Google Chrome",
+                "version": "118.0.5993.70"
+            },
+            {
+                "brand": "Not=A?Brand",
+                "version": "99.0.0.0"
+            }
+        ],
+        "mobile": "false",
+        "model": "",
+        "platform": "macOS",
+        "platform_version": "13.5.2",
+        "wow64": "false",
+        "brands": [
+            {
+                "brand": "Chromium",
+                "version": "118"
+            },
+            {
+                "brand": "Google Chrome",
+                "version": "118"
+            },
+            {
+                "brand": "Not=A?Brand",
+                "version": "99"
+            }
+        ]
+    },
+    "x-ga-mp2-are": "1",
+    "x-ga-system_properties": {
+        "eu": "AEA"
+    },
+    "x-sst-system_properties": {
+        "uc": "US",
+        "ngs": "1",
+        "gcd": "11l1l1l1l1",
+        "tft": "1701897643244",
+        "sp": "1",
+        "em_event": "1",
+        "consent": {
+            "consentGrantedState": {
+                "ad_storage": "true",
+                "analytics_storage": "true",
+                "ad_user_data": "true",
+                "ad_personalization": "true"
+            },
+            "isUpdate": "false",
+            "updateType": ""
+        },
+        "request_start_time_ms": "1701933991153"
+    },
+    "x-ga-request_count": "20",
+    "page_location": "https://www.xxxx.cloud/blank-1",
+    "page_referrer": "https://www.xxxx.cloud/",
+    "ga_session_id": "1701931976",
+    "ga_session_number": "8",
+    "x-ga-mp2-seg": "1",
+    "page_title": "About | XXXX Blog",
+    "event_name": "page_view",
+    "engagement_time_msec": "7125",
+    "x-ga-tfd": "19503482",
+    "ip_override": "50.46.231.154",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+}
