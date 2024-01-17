@@ -25,7 +25,9 @@ class ServerSideTaggerStack(Stack):
         ssl_cert_arn = self.node.try_get_context("ssl_cert_arn")
         gtm_cloud_image = self.node.try_get_context("gtm_cloud_image")
         container_config = self.node.try_get_context("container_config")
-
+        # added below to address certifcate validation error in the logs
+        # using the alb default dns causes certifcate validation error as the SSL may not have that entry
+        preview_dns = self.node.try_get_context("preview_server_dns")
         # -----------------------------------------------------------------------------------------------------------
         # defines a certificate from the ARN of a cert you have already created
         # -----------------------------------------------------------------------------------------------------------
@@ -73,6 +75,7 @@ class ServerSideTaggerStack(Stack):
                     'PORT': '80',
                     'CONTAINER_CONFIG': container_config,
                     'RUN_AS_PREVIEW_SERVER': 'true',
+                    'CONTAINER_REFRESH_SECONDS': '86400',
                 },
                 container_port=80
             )
@@ -104,7 +107,9 @@ class ServerSideTaggerStack(Stack):
                 environment= {
                     'PORT': '80',
                     'CONTAINER_CONFIG': container_config,
-                    'PREVIEW_SERVER_URL': 'https://'+gtm_preview_service.load_balancer.load_balancer_dns_name,
+                    # 'PREVIEW_SERVER_URL': 'https://'+gtm_preview_service.load_balancer.load_balancer_dns_name,
+                    'PREVIEW_SERVER_URL': f'https://{preview_dns}',
+                    'CONTAINER_REFRESH_SECONDS': '86400',
                 },
                 container_port=80
             ),

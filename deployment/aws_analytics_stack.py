@@ -25,6 +25,7 @@ from aws_solutions_constructs.aws_kinesis_streams_kinesis_firehose_s3 import Kin
 from deployment.server_side_tagger_stack import ServerSideTaggerStack
 
 from constructs import Construct
+import json
 
 DIRNAME = os.path.dirname(__file__)
 
@@ -33,8 +34,12 @@ class AWSAnalyticsStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, apigw, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # account and region
+        acc = os.getenv('CDK_DEFAULT_ACCOUNT')
+        region = os.getenv('CDK_DEFAULT_REGION')
         #creating Acess log group
         access_logs=logs.LogGroup(self, "ApiGatewayAccessLogs")
+        stream_name = "gtagStream"
 
         #creating role to execute API
         api_role=iam.Role(self,'gtagRole', assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"))
@@ -48,6 +53,19 @@ class AWSAnalyticsStack(Stack):
         cloud_watch_role.add_managed_policy(iam.ManagedPolicy.from_managed_policy_arn(self,"cwMgPolicyArn","arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"))
         account=apigateway.CfnAccount(self, 'cfnAccount', cloud_watch_role_arn=cloud_watch_role.role_arn)
 
+        # resource policy for api
+        api_policy=iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    actions=['execute-api:Invoke'],
+                    principals=[iam.AnyPrincipal()],
+                    resources=[f'arn:aws:execute-api:{region}:{acc}:*/prod/POST/*'],
+                    effect=iam.Effect.ALLOW
+                )
+            ]
+        )
+
+        
         #creating API GTW
         api = apigateway.RestApi(self, "GTMAPI",
              endpoint_configuration=apigateway.EndpointConfiguration(
@@ -59,7 +77,8 @@ class AWSAnalyticsStack(Stack):
                 data_trace_enabled=False,
                 metrics_enabled=True,
                 access_log_destination=apigateway.LogGroupLogDestination(access_logs),
-            )
+            ),
+            policy=api_policy
          )
         
 
@@ -78,16 +97,27 @@ class AWSAnalyticsStack(Stack):
         auth = apigateway.CognitoUserPoolsAuthorizer(self, "requestAuthorizer",
         cognito_user_pools=[user_pool])
 
+        # add mapping template to method
+        kinesis_template = '{"StreamName" :"'+ stream_name +'"'+""",
+                "PartitionKey" : $input.json('$.ga_session_id'),
+                "Data" : "$util.base64Encode($input.json('$'))"}"""
         
-         #adding method to the API GTW
+        # adding method to the API GTW with responses and translation templates
         method=api.root.add_method("POST", apigateway.AwsIntegration(
             service='kinesis',
-            action='PutRecords',
-            options=apigateway.IntegrationOptions(credentials_role=api_role)
+            action='PutRecord',
+            options=apigateway.IntegrationOptions(
+                credentials_role=api_role,
+                request_templates={"application/json": kinesis_template},
+                integration_responses=[apigateway.IntegrationResponse(status_code="200")],
+                passthrough_behavior=apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
+                )
         ), 
             authorizer=auth,
             authorization_type=apigateway.AuthorizationType.COGNITO
         )
+        # add method response that will essentially be the integration response passed through
+        method.add_method_response(status_code='200', response_models={'application/json': apigateway.Model.EMPTY_MODEL})
         method.grant_execute(api_role)
 
         #Adding request validator to API GTW
@@ -96,14 +126,20 @@ class AWSAnalyticsStack(Stack):
             validate_request_body=True,
             validate_request_parameters=True
         )
+        # add usage plan and api-key
+        plan = api.add_usage_plan("GTagStackUsagePlan", name="GTagStackUsagePlan")
+        plan.add_api_stage(stage=api.deployment_stage)
+
+        # add api key
+        key = api.add_api_key("GTagStackApiKey", api_key_name="GTagStackApiKey",)
+        plan.add_api_key(key)
 
         #Defining Kinesis data stream 
-        stream=kds.Stream(self, 'KinesisDataStream', stream_name='gtagStream')
+        stream=kds.Stream(self, 'KinesisDataStream', stream_name=stream_name)
         stream.grant(api_role, 'kinesis:PutRecords')
+        stream.grant(api_role, 'kinesis:PutRecord')
 
         # S3 buckets needs to have unique names
-        acc = os.getenv('CDK_DEFAULT_ACCOUNT')
-        region = os.getenv('CDK_DEFAULT_REGION')
         access_log_bucket_name=f"s3-access-log-{acc}-{region}"
         data_bucket_name=f"gtags3bucket-{acc}-{region}"
 
