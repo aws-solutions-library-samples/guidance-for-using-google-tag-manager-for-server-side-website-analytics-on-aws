@@ -2,5 +2,7 @@
     "ssl_cert_arn": "ARN from AWS Certificate manager",
     "gtm_cloud_image": "gcr.io/cloud-tagging-10302018/gtm-cloud-image",
     "container_config": "Container config string copied from Google Tag Manager",
-    "preview_server_dns": "preview-analytics.mydomain.com"
+    "preview_server_dns": "DNS name of the preview service end point",
+    "primary_server_dns": "DNS name of the primary service end point",
+    "root_dns": "Root DNS of the website domain",
 }
