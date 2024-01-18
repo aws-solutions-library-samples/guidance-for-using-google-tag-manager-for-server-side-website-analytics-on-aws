@@ -2,30 +2,17 @@ import os
 
 from aws_cdk import (
     Stack,
-    StackProps,
-    aws_certificatemanager as acm,
-    aws_ec2 as ec2,
-    aws_ecs as ecs,
-    aws_ecs_patterns as ecs_patterns,
     aws_apigateway as apigateway,
     aws_iam as iam,
-    aws_lambda as _lambda,
     aws_s3 as s3,
     aws_logs as logs,
     aws_cognito as cognito,
     aws_kinesis as kds,
-    aws_kinesisfirehose as kinesisfirehose,
-    aws_glue as glue,
-    aws_athena as athena,
-    aws_quicksight as quicksight,
-    aws_elasticsearch as elasticsearch0,
     RemovalPolicy
 )
-from aws_solutions_constructs.aws_kinesis_streams_kinesis_firehose_s3 import KinesisStreamsToKinesisFirehoseToS3 
-from deployment.server_side_tagger_stack import ServerSideTaggerStack
+from aws_solutions_constructs.aws_kinesis_streams_kinesis_firehose_s3 import KinesisStreamsToKinesisFirehoseToS3
 
 from constructs import Construct
-import json
 
 DIRNAME = os.path.dirname(__file__)
 
@@ -38,7 +25,7 @@ class AWSAnalyticsStack(Stack):
         acc = os.getenv('CDK_DEFAULT_ACCOUNT')
         region = os.getenv('CDK_DEFAULT_REGION')
         #creating Acess log group
-        access_logs=logs.LogGroup(self, "ApiGatewayAccessLogs")
+        access_logs=logs.LogGroup(self, "ApiGatewayAccessLogs", log_group_name="GTMAnalyticsStackAPIGWLogs", removal_policy=RemovalPolicy.RETAIN)
         stream_name = "gtagStream"
 
         #creating role to execute API
