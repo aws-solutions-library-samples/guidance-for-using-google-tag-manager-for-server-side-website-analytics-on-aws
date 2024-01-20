@@ -6,14 +6,12 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
-    Duration,
     aws_logs as logs,
     RemovalPolicy
 )
-from aws_cdk.aws_elasticloadbalancingv2 import ApplicationProtocol, SslPolicy, ListenerAction
+from aws_cdk.aws_elasticloadbalancingv2 import ListenerCondition, Protocol, HealthCheck, ApplicationProtocol
 from aws_cdk.aws_route53 import PrivateHostedZone, CnameRecord
 from constructs import Construct
-from jsii import interface
 
 DIRNAME = os.path.dirname(__file__)
 
@@ -42,14 +40,14 @@ class ServerSideTagger1LBStack(Stack):
         # by default, we will create a VPC with three public subnets, three private subnets with a NAT GW in each AZ
         # -----------------------------------------------------------------------------------------------------------
 
-        vpc = ec2.Vpc(self, "GTMVPC", vpc_name="GTMServerSideVPC")
+        vpc = ec2.Vpc(self, "GTMVPC", vpc_name="GTMServerSideVPC1LB")
 
         # -----------------------------------------------------------------------------------------------------------
         # defines a VPC Interface Endpoint
         # This will allow the ECS container to send post requests to a Private API Gateway
         # -----------------------------------------------------------------------------------------------------------
 
-        apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint",
+        apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint1LB",
             service=ec2.InterfaceVpcEndpointAwsService.APIGATEWAY
         )
         apigw_endpoints = []
@@ -59,55 +57,24 @@ class ServerSideTagger1LBStack(Stack):
         # defines an ECS cluster
         # -----------------------------------------------------------------------------------------------------------
 
-        cluster = ecs.Cluster(self, "GTMCluster", vpc=vpc, cluster_name="GTMServerSideCluster")        
+        cluster = ecs.Cluster(self, "GTMCluster", vpc=vpc, cluster_name="GTMServerSideCluster1LB")        
 
-        # -----------------------------------------------------------------------------------------------------------
-        # defines the preview google tag manager service
-        # -----------------------------------------------------------------------------------------------------------
-
-        # gtm_preview_service = ecs_patterns.ApplicationLoadBalancedFargateService(self, "GTMPreviewService",
-        #     cluster=cluster,
-        #     memory_limit_mib=1024,
-        #     cpu=256,
-        #     desired_count=1,
-        #     listener_port=443,
-        #     certificate=cert,
-        #     task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
-        #         image=ecs.ContainerImage.from_registry(gtm_cloud_image),
-        #         environment= {
-        #             'PORT': '80',
-        #             'CONTAINER_CONFIG': container_config,
-        #             'RUN_AS_PREVIEW_SERVER': 'true',
-        #             'CONTAINER_REFRESH_SECONDS': '86400',
-        #         },
-        #         container_port=80
-        #     ),
-        #     service_name="GTMServerSidePreviewService",
-        # )
-
-        # -----------------------------------------------------------------------------------------------------------
-        # defines the target group health check endpoint for the preview service
-        # -----------------------------------------------------------------------------------------------------------
-
-        # gtm_preview_service.target_group.configure_health_check(
-        #     path="/healthz"
-        # )
-        
         # -----------------------------------------------------------------------------------------------------------
         # defines the primary google tag manager service
-        # this service will have auto-scaling enabled by default
+        # Creating this first to have the default rule to be preview and priority 1 rule is primary
+        # this is to avoid rule evaluations on the majority of traffic
         # -----------------------------------------------------------------------------------------------------------
-        domain_zone=PrivateHostedZone(self, "GTMHostedZone", zone_name=root_dns,vpc=vpc)
-        primary_svc_log_group = logs.LogGroup(self, "GTMPrimaryServiceLogGroup",removal_policy=RemovalPolicy.RETAIN)
-        primary_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide", log_group=primary_svc_log_group)
-        preview_svc_log_group = logs.LogGroup(self, "GTMPreviewServiceLogGroup",removal_policy=RemovalPolicy.RETAIN)
-        preview_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide", log_group=preview_svc_log_group)
 
-        gtm_service = ecs_patterns.ApplicationLoadBalancedFargateService(self, "GTMService",
+        primary_svc_log_group = logs.LogGroup(self, "GTMPrimaryServiceLogGroup1LB",removal_policy=RemovalPolicy.DESTROY, log_group_name="GTMPrimaryServiceLogGroup1LB")
+        primary_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide1LB", log_group=primary_svc_log_group)
+        preview_svc_log_group = logs.LogGroup(self, "GTMPreviewServiceLogGroup1LB",removal_policy=RemovalPolicy.DESTROY, log_group_name="GTMPreviewServiceLogGroup1LB")
+        preview_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide1LB", log_group=preview_svc_log_group)
+
+        gtm_preview_service = ecs_patterns.ApplicationLoadBalancedFargateService(self, "GTMService1LB",
             cluster=cluster,
             memory_limit_mib=1024,
             cpu=512,
-            desired_count=3,
+            desired_count=1,
             listener_port=443,
             certificate=cert,
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
@@ -115,24 +82,76 @@ class ServerSideTagger1LBStack(Stack):
                 environment= {
                     'PORT': '80',
                     'CONTAINER_CONFIG': container_config,
-                    # 'PREVIEW_SERVER_URL': 'https://'+gtm_preview_service.load_balancer.load_balancer_dns_name,
-                    'PREVIEW_SERVER_URL': f'https://{preview_dns}',
+                    'RUN_AS_PREVIEW_SERVER': 'true',
                     'CONTAINER_REFRESH_SECONDS': '86400',
                 },
                 container_port=80,
-                log_driver=primary_log_driver,
+                log_driver=preview_log_driver,
             ),
-            service_name="GTMServerSidePrimaryService",
-            load_balancer_name="GTMServerSideLoadBalancer",
+            service_name="GTMServerSidePreviewService1LB",
+            load_balancer_name="GTMServerSideLoadBalancer1LB",
         )
 
-        gtm_service.target_group.add_target()
-
         # -----------------------------------------------------------------------------------------------------------
-        # defines the autoscaling configuration
+        # defines the target group health check endpoint for preview
         # -----------------------------------------------------------------------------------------------------------
 
-        scalable_target = gtm_service.service.auto_scale_task_count(
+        gtm_preview_service.target_group.configure_health_check(
+            path="/healthz"
+        )
+
+        # -----------------------------------------------------------------------------------------------------------
+        # defines the primary google tag manager service
+        # -----------------------------------------------------------------------------------------------------------
+        
+        primary_task_definition = ecs.FargateTaskDefinition(self, "GTMPrimaryTaskDefinition1LB", 
+            cpu=512,
+            memory_limit_mib=1024
+        )
+
+        primary_task_definition.add_container("GTMPrimaryContainer1LB",
+            image=ecs.ContainerImage.from_registry(gtm_cloud_image),
+            environment= {
+                'PORT': '80',
+                'CONTAINER_CONFIG': container_config,
+                'PREVIEW_SERVER_URL': f'https://{preview_dns}',
+                'CONTAINER_REFRESH_SECONDS': '86400',
+            },
+            port_mappings=[ecs.PortMapping(container_port=80, host_port=80)],
+            logging=primary_log_driver
+        )
+        gtm_service = ecs.FargateService(self, "GTMPrimaryService1LB",
+            service_name="GTMServerSidePrimaryService1LB",
+            cluster=cluster,
+            task_definition=primary_task_definition,
+            desired_count=3,
+        )
+
+        gtm_preview_service.load_balancer.listeners[0].add_targets(
+            "GTMPrimaryServiceTargetGroup1LB",
+            targets=[
+                gtm_service.load_balancer_target(
+                    container_name="GTMPrimaryContainer1LB",
+                    container_port=80
+                )
+            ],
+            conditions=[ListenerCondition.host_headers([primary_dns])],
+            priority=1,
+            protocol=ApplicationProtocol.HTTP,
+            health_check=HealthCheck(path="/healthz", protocol=Protocol.HTTP)
+        )
+
+        gtm_service.connections.allow_from(
+            gtm_preview_service.load_balancer.connections.security_groups[0],
+            # lb_security_group,
+            port_range=ec2.Port.tcp(80),
+            description="Allow inbound traffic from ELB to Primary Service"
+            )
+        # -----------------------------------------------------------------------------------------------------------
+        # defines the autoscaling configuration for primary service
+        # -----------------------------------------------------------------------------------------------------------
+
+        scalable_target = gtm_service.auto_scale_task_count(
             max_capacity=10,
             min_capacity=2
         )
@@ -146,32 +165,12 @@ class ServerSideTagger1LBStack(Stack):
         )
         
         # -----------------------------------------------------------------------------------------------------------
-        # defines the target group health check endpoint
+        # defines the hosted zone for internal DNS resolution from primary service to preview service and SSL handling
         # -----------------------------------------------------------------------------------------------------------
-
-        gtm_service.target_group.configure_health_check(
-            path="/healthz"
-        )
-        preview_task_definition = ecs.FargateTaskDefinition(self, "GTMPreviewTaskDefinition")
-        preview_task_definition.add_container("GTMPreviewContainer",
-            image=ecs.ContainerImage.from_registry(gtm_cloud_image),
-            environment= {
-                'PORT': '80',
-                'CONTAINER_CONFIG': container_config,
-                'RUN_AS_PREVIEW_SERVER': 'true',
-                'CONTAINER_REFRESH_SECONDS': '86400',
-            },
-            port_mappings=[ecs.PortMapping(container_port=80, host_port=80)],
-            logging=preview_log_driver,
-        )
-        gtm_preview_service = ecs.FargateService(self, "GTMPreviewService",
-            service_name="GTMServerSidePreviewService",
-            cluster=cluster,
-            task_definition=preview_task_definition
-        )
+        domain_zone=PrivateHostedZone(self, "GTMHostedZone1LB", zone_name=root_dns,vpc=vpc)
 
         CnameRecord(self, "GTMPreviewRecord",
             record_name=preview_dns,
             zone=domain_zone,
-            domain_name=gtm_service.load_balancer.load_balancer_dns_name
+            domain_name=gtm_preview_service.load_balancer.load_balancer_dns_name
         )

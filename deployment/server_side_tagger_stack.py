@@ -6,9 +6,10 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
+    RemovalPolicy,
+    aws_logs as logs,
 )
 from constructs import Construct
-from jsii import interface
 
 DIRNAME = os.path.dirname(__file__)
 
@@ -34,7 +35,7 @@ class ServerSideTaggerStack(Stack):
         # by default, we will create a VPC with three public subnets, three private subnets with a NAT GW in each AZ
         # -----------------------------------------------------------------------------------------------------------
 
-        vpc = ec2.Vpc(self, "GTMVPC")
+        vpc = ec2.Vpc(self, "GTMVPC", vpc_name="GTMServerSideVPC")
 
         # -----------------------------------------------------------------------------------------------------------
         # defines a VPC Interface Endpoint
@@ -47,11 +48,17 @@ class ServerSideTaggerStack(Stack):
         apigw_endpoints = []
         apigw_endpoints.append(apigw_endpoint)
         self.apigw_endpoints=apigw_endpoints
+
+        # setup log groups
+        primary_svc_log_group = logs.LogGroup(self, "GTMPrimaryServiceLogGroup",removal_policy=RemovalPolicy.RETAIN, log_group_name="GTMPrimaryServiceLogGroup")
+        primary_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide", log_group=primary_svc_log_group)
+        preview_svc_log_group = logs.LogGroup(self, "GTMPreviewServiceLogGroup",removal_policy=RemovalPolicy.RETAIN, log_group_name="GTMPreviewServiceLogGroup")
+        preview_log_driver = ecs.AwsLogDriver(stream_prefix="GTMServerSide", log_group=preview_svc_log_group)
         # -----------------------------------------------------------------------------------------------------------
         # defines an ECS cluster
         # -----------------------------------------------------------------------------------------------------------
 
-        cluster = ecs.Cluster(self, "GTMCluster", vpc=vpc)        
+        cluster = ecs.Cluster(self, "GTMCluster", vpc=vpc, cluster_name="GTMServerSideCluster")        
 
         # -----------------------------------------------------------------------------------------------------------
         # defines the preview google tag manager service
@@ -72,8 +79,11 @@ class ServerSideTaggerStack(Stack):
                     'RUN_AS_PREVIEW_SERVER': 'true',
                     'CONTAINER_REFRESH_SECONDS': '86400',
                 },
-                container_port=80
-            )
+                container_port=80,
+                log_driver=preview_log_driver,
+            ),
+            service_name="GTMPreviewService",
+            load_balancer_name="GTMPreviewLoadBalancer",
         )
 
         # -----------------------------------------------------------------------------------------------------------
@@ -106,9 +116,11 @@ class ServerSideTaggerStack(Stack):
                     'PREVIEW_SERVER_URL': f'https://{preview_dns}',
                     'CONTAINER_REFRESH_SECONDS': '86400',
                 },
-                container_port=80
+                container_port=80,
+                log_driver=primary_log_driver
             ),
-
+            service_name="GTMPrimaryService",
+            load_balancer_name="GTMPrimaryLoadBalancer",
         )
 
         # -----------------------------------------------------------------------------------------------------------
