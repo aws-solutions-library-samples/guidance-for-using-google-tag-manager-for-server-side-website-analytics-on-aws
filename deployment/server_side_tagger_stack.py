@@ -36,6 +36,7 @@ class ServerSideTaggerStack(Stack):
         # -----------------------------------------------------------------------------------------------------------
 
         vpc = ec2.Vpc(self, "GTMVPC", vpc_name="GTMServerSideVPC")
+        self.vpc = vpc
 
         # -----------------------------------------------------------------------------------------------------------
         # defines a VPC Interface Endpoint
@@ -93,6 +94,8 @@ class ServerSideTaggerStack(Stack):
         gtm_preview_service.target_group.configure_health_check(
             path="/healthz"
         )
+        self.load_balancer = gtm_preview_service.load_balancer
+        self.ecs_cluster = gtm_preview_service.cluster
         
         # -----------------------------------------------------------------------------------------------------------
         # defines the primary google tag manager service

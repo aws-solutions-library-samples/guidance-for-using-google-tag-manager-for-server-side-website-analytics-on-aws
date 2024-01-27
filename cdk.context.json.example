@@ -5,4 +5,5 @@
     "preview_server_dns": "DNS name of the preview service end point",
     "primary_server_dns": "DNS name of the primary service end point",
     "root_dns": "Root DNS of the website domain",
+    "producer_service_dns": "DNS for the kinesis producer api",
 }

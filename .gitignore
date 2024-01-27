@@ -14,3 +14,4 @@ cdk.context.json
 
 # linting
 bandit_apponly.out
+source/producer/target

@@ -41,6 +41,7 @@ class ServerSideTagger1LBStack(Stack):
         # -----------------------------------------------------------------------------------------------------------
 
         vpc = ec2.Vpc(self, "GTMVPC", vpc_name="GTMServerSideVPC1LB")
+        self.vpc = vpc
 
         # -----------------------------------------------------------------------------------------------------------
         # defines a VPC Interface Endpoint
@@ -58,6 +59,7 @@ class ServerSideTagger1LBStack(Stack):
         # -----------------------------------------------------------------------------------------------------------
 
         cluster = ecs.Cluster(self, "GTMCluster", vpc=vpc, cluster_name="GTMServerSideCluster1LB")        
+        self.ecs_cluster = cluster
 
         # -----------------------------------------------------------------------------------------------------------
         # defines the primary google tag manager service
@@ -99,7 +101,7 @@ class ServerSideTagger1LBStack(Stack):
         gtm_preview_service.target_group.configure_health_check(
             path="/healthz"
         )
-
+        self.load_balancer = gtm_preview_service.load_balancer
         # -----------------------------------------------------------------------------------------------------------
         # defines the primary google tag manager service
         # -----------------------------------------------------------------------------------------------------------
@@ -168,7 +170,8 @@ class ServerSideTagger1LBStack(Stack):
         # defines the hosted zone for internal DNS resolution from primary service to preview service and SSL handling
         # -----------------------------------------------------------------------------------------------------------
         domain_zone=PrivateHostedZone(self, "GTMHostedZone1LB", zone_name=root_dns,vpc=vpc)
-
+        self.hosted_zone=domain_zone
+        
         CnameRecord(self, "GTMPreviewRecord",
             record_name=preview_dns,
             zone=domain_zone,
