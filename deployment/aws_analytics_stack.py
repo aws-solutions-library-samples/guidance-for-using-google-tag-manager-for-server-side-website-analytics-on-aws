@@ -11,7 +11,6 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ec2 as ec2,
     aws_elasticloadbalancingv2 as elbv2,
-    aws_kinesisfirehose as kinesisfirehose
 )
 from aws_solutions_constructs.aws_kinesis_streams_kinesis_firehose_s3 import KinesisStreamsToKinesisFirehoseToS3
 from constructs import Construct
@@ -21,8 +20,7 @@ DIRNAME = os.path.dirname(__file__)
 
 class AWSAnalyticsStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, 
-                 apigw: [ec2.InterfaceVpcEndpoint], vpc: ec2.Vpc, load_balancer: elbv2.ApplicationLoadBalancer, 
+    def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, load_balancer: elbv2.ApplicationLoadBalancer, 
                  cluster: ecs.ICluster, hosted_zone: PrivateHostedZone, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -36,6 +34,19 @@ class AWSAnalyticsStack(Stack):
         stream_name = "gtagStream"
         producer_svc_log_group = logs.LogGroup(self, "GTMProducerServiceLogGroup1LB",removal_policy=RemovalPolicy.DESTROY, log_group_name="GTMProducerServiceLogGroup1LB")
         producer_log_driver = ecs.AwsLogDriver(stream_prefix="GTMProducerLogDriver", log_group=producer_svc_log_group)
+
+        # -----------------------------------------------------------------------------------------------------------
+        # defines a VPC Interface Endpoint
+        # This will allow the ECS container to send post requests to kinesis and api gw
+        # -----------------------------------------------------------------------------------------------------------
+
+        kinesis_endpoint = vpc.add_interface_endpoint("KinesisInterfaceEndpoint1LB",
+            service=ec2.InterfaceVpcEndpointAwsService.KINESIS_STREAMS
+        )
+        apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint1LB",
+            service=ec2.InterfaceVpcEndpointAwsService.APIGATEWAY
+        )
+        self.vpc_endpoints=[kinesis_endpoint, apigw_endpoint]
 
         #Defining Kinesis data stream 
         stream=kds.Stream(self, 'KinesisDataStream', stream_name=stream_name)
@@ -54,9 +65,9 @@ class AWSAnalyticsStack(Stack):
                             auto_delete_objects=True, removal_policy=RemovalPolicy.DESTROY)
         
         # to address cdk nag AwsSolutions-KDF1
-        del_stream_enc_conf_in_prop = kinesisfirehose.CfnDeliveryStream.DeliveryStreamEncryptionConfigurationInputProperty(
-            key_type="AWS_OWNED_CMK"
-        )
+        # del_stream_enc_conf_in_prop = kinesisfirehose.CfnDeliveryStream.DeliveryStreamEncryptionConfigurationInputProperty(
+        #     key_type="AWS_OWNED_CMK"
+        # )
         
         # Creating Kinesis data firehose stream that writes to a S3 bucket
         # Cannot enable encryption for a delivery stream using kinesis streams as a source
@@ -102,7 +113,7 @@ class AWSAnalyticsStack(Stack):
             api = apigateway.RestApi(self, "GTMAPI",
                 endpoint_configuration=apigateway.EndpointConfiguration(
                     types=[apigateway.EndpointType.PRIVATE],
-                    vpc_endpoints=apigw
+                    vpc_endpoints=self.vpc_endpoints
                 ),
                 deploy_options=apigateway.StageOptions(
                     logging_level=apigateway.MethodLoggingLevel.ERROR,

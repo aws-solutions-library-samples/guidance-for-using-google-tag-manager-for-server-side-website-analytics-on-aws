@@ -34,7 +34,6 @@ aws_analytics_stack = AWSAnalyticsStack(app, "AWSAnalyticsStack",
         account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
         region=os.getenv('CDK_DEFAULT_REGION')
         ),
-    apigw=server_side_tagger_single_LB_stack.apigw_endpoints,
     vpc=server_side_tagger_single_LB_stack.vpc,
     load_balancer=server_side_tagger_single_LB_stack.load_balancer,
     cluster=server_side_tagger_single_LB_stack.ecs_cluster,

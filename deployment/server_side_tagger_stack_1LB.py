@@ -44,17 +44,6 @@ class ServerSideTagger1LBStack(Stack):
         self.vpc = vpc
 
         # -----------------------------------------------------------------------------------------------------------
-        # defines a VPC Interface Endpoint
-        # This will allow the ECS container to send post requests to a Private API Gateway
-        # -----------------------------------------------------------------------------------------------------------
-
-        apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint1LB",
-            service=ec2.InterfaceVpcEndpointAwsService.APIGATEWAY
-        )
-        apigw_endpoints = []
-        apigw_endpoints.append(apigw_endpoint)
-        self.apigw_endpoints=apigw_endpoints
-        # -----------------------------------------------------------------------------------------------------------
         # defines an ECS cluster
         # -----------------------------------------------------------------------------------------------------------
 
