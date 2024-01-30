@@ -6,5 +6,5 @@
     "primary_server_dns": "DNS name of the primary service end point",
     "root_dns": "Root DNS of the website domain",
     "producer_service_dns": "DNS for the kinesis producer api",
-    "data_capture_api_method": "api_gateway" # remove this parameter to deploy a KPL container
+    "data_capture_api_method": "api_gateway"
 }
