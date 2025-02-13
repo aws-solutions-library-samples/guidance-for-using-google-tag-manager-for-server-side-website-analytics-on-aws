@@ -6,7 +6,6 @@ import aws_cdk as cdk
 from deployment.server_side_tagger_stack import ServerSideTaggerStack
 from deployment.aws_analytics_stack import AWSAnalyticsStack
 
-
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 
 app = cdk.App()
@@ -16,7 +15,7 @@ server_side_tagger_stack = ServerSideTaggerStack(app, "ServerSideTaggerStack",
         account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
         region=os.getenv('CDK_DEFAULT_REGION')
         ),
-    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS (SO9262)"
+    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Collection stack (SO9262)"
     )
 
 aws_analytics_stack = AWSAnalyticsStack(app, "AWSAnalyticsStack",
@@ -25,13 +24,14 @@ aws_analytics_stack = AWSAnalyticsStack(app, "AWSAnalyticsStack",
         account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
         region=os.getenv('CDK_DEFAULT_REGION')
         ),
-    apigw=server_side_tagger_stack.apigw_endpoints,
-    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS (SO9262)"
+    vpc=server_side_tagger_stack.vpc,
+    load_balancer=server_side_tagger_stack.load_balancer,
+    cluster=server_side_tagger_stack.ecs_cluster,
+    hosted_zone=server_side_tagger_stack.hosted_zone,
+    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Analytics stack (SO9262)"
     )
 
-NagSuppressions.add_stack_suppressions(
-    server_side_tagger_stack,
-    [
+nag_supressions = [
         {
             "id": "AwsSolutions-IAM5",
             "reason": "AWS managed policies are allowed which sometimes uses * in the resources like - AWSGlueServiceRole has aws-glue-* . AWS Managed IAM policies have been allowed to maintain secured access with the ease of operational maintenance - however for more granular control the custom IAM policies can be used instead of AWS managed policies",
@@ -115,52 +115,23 @@ NagSuppressions.add_stack_suppressions(
         {
             'id': 'AwsSolutions-IAM4',
             'reason': 'The managed policy AmazonAPIGatewayPushToCloudWatchLogs is required for apigateway cloud watch logging'
+        },
+        {
+            'id': 'AwsSolutions-KDF1',
+            'reason': '"Cannot enable encryption for a delivery stream using kinesis streams as a source'
         }
         
-    ],
+    ]
+
+NagSuppressions.add_stack_suppressions(
+    server_side_tagger_stack,
+    nag_supressions,
     apply_to_nested_stacks=True
 )
 
 NagSuppressions.add_stack_suppressions(
     aws_analytics_stack,
-    [
-        {
-            'id': 'AwsSolutions-KDS3',
-            'reason': 'Serverside encryption not enforced in this stack. Stack not intented for production deployment. Called out in the notice',
-        },
-        {
-            'id': 'AwsSolutions-IAM4',
-            'reason': 'The managed policy AmazonAPIGatewayPushToCloudWatchLogs is required for apigateway cloud watch logging'
-        },
-        {
-            'id': 'AwsSolutions-IAM5',
-            'reason': 'Wild card is to give kinesis firehose access to all prefix in the s3 bucket'
-        },
-        {
-            'id': 'AwsSolutions-KDF1',
-            'reason': 'Serverside encryption not enforced in this stack. Stack not intented for production deployment. Called out in the notice',
-        },
-        {
-            'id': 'AwsSolutions-APIG3',
-            'reason': 'The REST API stage is not associated with AWS WAFv2 web ACL.',
-        },
-        {
-            'id': 'AwsSolutions-COG2',
-            'reason': 'The Cognito user pool does not require MFA.',
-        },
-        {
-            'id': 'AwsSolutions-KDS3',
-            'reason': 'The Kinesis Data Stream specifies server-side encryption and does not use the "aws/kinesis" key',
-        },
-        {
-            "id": "AwsSolutions-IAM5",
-            "reason": "AWS managed policies are allowed which sometimes uses * in the resources like - AWSGlueServiceRole has aws-glue-* . AWS Managed IAM policies have been allowed to maintain secured access with the ease of operational maintenance - however for more granular control the custom IAM policies can be used instead of AWS managed policies",
-        },
-        {
-            "id": "AwsSolutions-KDF1",
-            "reason": "The Kinesis Data Firehose delivery doesn't need server side encryption",
-        },
-    ],
+    nag_supressions,
     apply_to_nested_stacks=True
 )
 

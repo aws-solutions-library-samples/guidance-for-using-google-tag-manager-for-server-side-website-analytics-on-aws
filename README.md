@@ -20,45 +20,15 @@
 
 Summary: This cdk code deploys the Google Server-Side Tag Manager in a container on AWS using Amazon Elastic Container Service (Amazon ECS). This allows you to collect data directly from web browsers using client-side libraries. Using this implementation, you can gain control over how your website tracking data is collected and processed and where it is sent. You can continue to use the Google Tag Manager control plane and Google Analytics™ service with this Guidance.
 
-The solution illustrates two different approaches to collect and analyze hit-level data using AWS services:
-
-1) Historical data analysis and visualization using a data lake architecture with Amazon Kinesis Data Streams, Amazon Kinesis Data Firehose, Amazon Simple Storage Service (Amazon S3), Amazon Athena, and Amazon QuickSight.
-
-2) Near real-time analysis and visualization using Kinesis Data Streams, AWS Lambda, and Amazon OpenSearch Service.
+The solution illustrates two different configurations each to collect and analyze hit-level data using AWS services. You can choose to send data to Amazon Kinesis using below two methods
+1. API Gateway 
+2. Producer Service deployed on the same ECS cluster which runs the Server Side Tagging container
 
 ### Architecture Overview
-
-![architecture diagram](./assets/gtag-architecture-diagram.png)
-
-1) The Google Tag Manager user interface (UI) acts as the control plane. The UI configures pixel tags that capture business-relevant user interactions on web properties in Server Side Tagging mode. 
-
-2) As users interact with the website, the pixel code loaded in the browser from the Google Tag Manager configuration fires events.
-
-3) Amazon Route 53 and Application Load Balancer send these events to a backend service.
-
-4) Google’s Server Side Tag Manager Service is deployed on Amazon Elastic Container Service (Amazon ECS). The Server Side Tagging Service acts as the data collector and receives events from Application Load Balancer.
-
-5) The Server Side Tagging Preview Service deployed on Amazon ECS tests and previews the tag configuration. This service is connected to the client side and the Server Side Tagging Service through an Application Load Balancer and Route 53.
-
-6) The Server Side Tagging Service sends HTTPS Post requests to an internal, private Amazon API Gateway endpoint. This endpoint is connected to the Amazon Virtual Private Cloud (Amazon VPC) with an interface endpoint.
-
-7) These events are also sent to the Google Analytics™ service and any third-party data collectors that are already in use, requiring no changes to the front-end code.
-
-8) Amazon Kinesis Data Steams receives requests from API Gateway through a direct integration.
-
-9) Amazon Kinesis Data Firehose receives data from Kinesis Data Streams and stores it in an Amazon Simple Storage Service (S3) bucket for long-term storage and historical or ad-hoc analysis.
-
-10) Optionally, use AWS Lambda with Kinesis Data Firehose to enrich events or remove sensitive data from the events before storing them in Amazon S3.
-
-11) AWS Glue Crawler and AWS Glue Data Catalog capture the metadata, enabling Amazon Athena to query the data.
-
-12) Amazon QuickSight builds interactive dashboards and uses Athena to query data.
-
-13) Lambda is configured to act as a secondary receiver of the same Kinesis Data Streams event stream.
-
-14) The Lambda function, integrated with Kinesis Data Streams, loads data into Amazon OpenSearch Service for near realtime analysis and observability.
-
-15) Website event data stored in Amazon S3 serves as a foundation for building a customer 360 profile, web personalization using Amazon Personalize, privacyenhanced data collaboration with advertising partners using AWS Clean Rooms, and artificial intelligence and machine learning (AI/ML) use cases.
+#### API Gateway in analytics stack
+![public preview server architecture diagram](./assets/gtag-architecture-diagram-private-preview-server.png)
+#### Kinesis Producer in analytics stack 
+![public preview server architecture diagram](./assets/gtag-architecture-diagram-kinesis-producer.png)
 
 ### Cost
 
@@ -97,6 +67,10 @@ aws configure --profile <profile name>
 
 1) Complete the steps mentioned in the [Google Tag Manager Setup section](https://aws-solutions-library-samples.github.io/advertising-marketing/using-google-tag-manager-for-server-side-website-analytics-on-aws.html#google-tag-manager-setup) of the implementation guide.
 2) Take a note of the [container config string](https://aws-solutions-library-samples.github.io/advertising-marketing/using-google-tag-manager-for-server-side-website-analytics-on-aws.html#google-tag-manager-setup:~:text=and%20copy%20the-,Container%20Config%20string,-to%20a%20notepad)
+3) When using API gateway option, you have two options to shape the event in a format that the kinesis api can read. 
+    a) Use the template option in the api gateway (already done as part of stack). If you are okay with this method no further action is needed.
+    b) Use a [modified version of the google tag manager "JSON HTTP request"](./source/gtm_template.js) to pre-transform the event as it reaches api gateway
+    ![Editing template code in google tag manager](./assets/gtm_template.png)
 
 ### Python Dependencies
 Review [requirements.txt](./requirements.txt) for the python dependencies
@@ -135,13 +109,22 @@ git clone git@github.com:aws-solutions-library-samples/guidance-for-website-anal
     1. Update the SSL certificate arn you got from completing the [Account requirements](#aws-account-requirements) section. Make sure that you have created the SSL certificate in the same AWS Region as you are doing the CDK deployment
     2. Update the location of the Google Tag Manager container image if needed. See [Google Documentation](https://developers.google.com/tag-platform/tag-manager/server-side/manual-setup-guide) for more details on this docker container image.
     3. Update the container config string you created in the [Google Tag Manager setup step](#google-tag-manager-setup)
+    4. Select the analytics stack integration option
 ```
 {
-    "ssl_cert_arn": "your-ssl-cert-arn",
+    "ssl_cert_arn": "ARN from AWS Certificate manager",
     "gtm_cloud_image": "gcr.io/cloud-tagging-10302018/gtm-cloud-image",
-    "container_config": "your-container-config"
+    "container_config": "Container config string copied from Google Tag Manager",
+    "preview_server_dns": "DNS name of the preview service end point",
+    "primary_server_dns": "DNS name of the primary service end point",
+    "root_dns": "Root DNS of the website domain",
+    "producer_service_dns": "DNS for the kinesis producer api",
+    "data_capture_api_method": "api_gateway"
 }
-
+ssl_cert_arn - Create the SSL certificate manually, validate it and give the ARN as input here
+gtm_cloud_image - Change this ONLY if google releases a new version of the container image
+producer_service_dns - Needed only for kinesis producer is used
+data_capture_api_method - api_gateway deploys an api gateway, any other value deploys kinesis producer 
  ```
 
 5. Review the infrastructure components being deployed
@@ -206,7 +189,10 @@ These commands deletes resources deploying through the solution. S3 buckets cont
 
 
 ## FAQ, known issues, additional considerations, and limitations
-
+1. The Api gateway deployed doesnt have an auth mechanism. If this is of concern, go with kinesis producer approach
+2. Consider Kinesis producer source code as fit for dev/test environment. Harden and instrument the code for production worthiness
+3. For application logs use AWS Cloud Watch logs. The stack provisions log groups to organize them
+4. Implementation guide associated with the guidance captures the steps for creating the public preview server configuration manually in the console
 
 **Known issues**
 
@@ -221,10 +207,13 @@ These commands deletes resources deploying through the solution. S3 buckets cont
 
 - Review [AWS Click Stream Analytics Solution](https://aws.amazon.com/solutions/implementations/clickstream-analytics-on-aws/) for building a BI layer on top of click stream data on AWS. Use the [transformer code](https://github.com/awslabs/clickstream-analytics-on-aws/tree/main/examples/custom-plugins/custom-sdk-transformer) to transform the raw data to work with Solution's out of the box BI dashboards. 
 
+- You can do historical data analysis and visualization using a data lake architecture with Amazon Kinesis Data Streams, Amazon Kinesis Data Firehose, Amazon Simple Storage Service (Amazon S3), Amazon Athena, and Amazon QuickSight. Near real-time analysis and visualization using Kinesis Data Streams, Managed Apache Flink, AWS Lambda, and Amazon OpenSearch Service. The repo has a [sample python notebook with an apache flink application](./source/Gtag_ServerSide_Clickstream_Agg_Flink.ipynb) to start analysis of data that is available in Kinesis in near real time.
+
 - For any feedback, questions, or suggestions, please use the issues tab under this repo.
 
 ## Revisions
-
+* Dec 2023 - Initial version
+* June 2024 - multiple configurations for data collection and analytics event capture
 
 ## Notices
 

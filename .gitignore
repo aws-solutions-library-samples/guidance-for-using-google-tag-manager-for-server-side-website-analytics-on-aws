@@ -5,6 +5,7 @@ __pycache__
 .venv
 *.egg-info
 .DS_Store
+.vscode
 # CDK asset staging directory
 .cdk.staging
 cdk.out
@@ -14,3 +15,4 @@ cdk.context.json
 
 # linting
 bandit_apponly.out
+source/producer/target
