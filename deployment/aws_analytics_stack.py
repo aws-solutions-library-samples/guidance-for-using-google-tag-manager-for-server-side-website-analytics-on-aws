@@ -1,3 +1,9 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Licensed under the Apache License Version 2.0 (the "License"). You may not use this file except
+# in compliance with the License. A copy of the License is located at http://www.apache.org/licenses/
+# or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
 import os
 from aws_cdk import (
     Stack,
@@ -32,21 +38,13 @@ class AWSAnalyticsStack(Stack):
         acc = os.getenv('CDK_DEFAULT_ACCOUNT')
         region = os.getenv('CDK_DEFAULT_REGION')
         stream_name = "gtagStream"
-        producer_svc_log_group = logs.LogGroup(self, "GTMProducerServiceLogGroup1LB",removal_policy=RemovalPolicy.DESTROY, log_group_name="GTMProducerServiceLogGroup1LB")
+        producer_svc_log_group = logs.LogGroup(self, "GTMProducerServiceLogGroup",removal_policy=RemovalPolicy.DESTROY, log_group_name="GTMProducerServiceLogGroup")
         producer_log_driver = ecs.AwsLogDriver(stream_prefix="GTMProducerLogDriver", log_group=producer_svc_log_group)
 
         # -----------------------------------------------------------------------------------------------------------
         # defines a VPC Interface Endpoint
         # This will allow the ECS container to send post requests to kinesis and api gw
         # -----------------------------------------------------------------------------------------------------------
-
-        kinesis_endpoint = vpc.add_interface_endpoint("KinesisInterfaceEndpoint1LB",
-            service=ec2.InterfaceVpcEndpointAwsService.KINESIS_STREAMS
-        )
-        apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint1LB",
-            service=ec2.InterfaceVpcEndpointAwsService.APIGATEWAY
-        )
-        self.vpc_endpoints=[kinesis_endpoint, apigw_endpoint]
 
         #Defining Kinesis data stream 
         stream=kds.Stream(self, 'KinesisDataStream', stream_name=stream_name)
@@ -80,6 +78,11 @@ class AWSAnalyticsStack(Stack):
         
         # Depending up on the choice of ingestion method create resources
         if data_capture_api_method == "api_gateway":
+
+            apigw_endpoint = vpc.add_interface_endpoint("APIGWInterfaceEndpoint",
+                service=ec2.InterfaceVpcEndpointAwsService.APIGATEWAY
+            )
+            self.vpc_endpoints=[apigw_endpoint]
 
             #creating Acess log group
             access_logs=logs.LogGroup(self, "ApiGatewayAccessLogs", log_group_name="GTMAnalyticsStackAPIGWLogs", removal_policy=RemovalPolicy.RETAIN)
@@ -185,13 +188,13 @@ class AWSAnalyticsStack(Stack):
             # Producer service in the same cluster
             # cpu and memory min settings needed to avoid java heap error
             # may need to set DOCKER_DEFAULT_PLATFORM=linux/amd64 before starting deploy
-            producer_task_definition = ecs.FargateTaskDefinition(self, "GTMproducerTaskDefinition1LB", 
+            producer_task_definition = ecs.FargateTaskDefinition(self, "GTMproducerTaskDefinition", 
                 cpu=1024,
                 memory_limit_mib=2048,
                 runtime_platform=ecs.RuntimePlatform(cpu_architecture=ecs.CpuArchitecture.X86_64, operating_system_family=ecs.OperatingSystemFamily.LINUX)
             )
 
-            producer_task_definition.add_container("GTMproducerContainer1LB",
+            producer_task_definition.add_container("GTMproducerContainer",
                 image=ecs.ContainerImage.from_asset("source/producer",
                     platform=Platform.LINUX_AMD64,
                     ),
@@ -203,18 +206,18 @@ class AWSAnalyticsStack(Stack):
                 port_mappings=[ecs.PortMapping(container_port=8080, host_port=8080)],
                 logging=producer_log_driver
             )
-            gtm_producer_service = ecs.FargateService(self, "GTMproducerService1LB",
-                service_name="GTMServerSideproducerService1LB",
+            gtm_producer_service = ecs.FargateService(self, "GTMproducerService",
+                service_name="GTMServerSideproducerService",
                 cluster=cluster,
                 task_definition=producer_task_definition,
                 desired_count=1,
             )
 
             load_balancer.listeners[0].add_targets(
-                "GTMproducerServiceTargetGroup1LB",
+                "GTMproducerServiceTargetGroup",
                 targets=[
                     gtm_producer_service.load_balancer_target(
-                        container_name="GTMproducerContainer1LB",
+                        container_name="GTMproducerContainer",
                         container_port=8080
                     )
                 ],
@@ -257,3 +260,8 @@ class AWSAnalyticsStack(Stack):
 
             # Connect the producer service to the kinesis stream
             stream.grant_read_write(gtm_producer_service.task_definition.task_role)
+
+            kinesis_endpoint = vpc.add_interface_endpoint("KinesisInterfaceEndpoint",
+                service=ec2.InterfaceVpcEndpointAwsService.KINESIS_STREAMS
+            )
+            self.vpc_endpoints=[kinesis_endpoint]

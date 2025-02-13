@@ -5,7 +5,6 @@ import aws_cdk as cdk
 
 from deployment.server_side_tagger_stack import ServerSideTaggerStack
 from deployment.aws_analytics_stack import AWSAnalyticsStack
-from deployment.server_side_tagger_stack_1LB import ServerSideTagger1LBStack
 
 from cdk_nag import AwsSolutionsChecks, NagSuppressions
 
@@ -16,16 +15,7 @@ server_side_tagger_stack = ServerSideTaggerStack(app, "ServerSideTaggerStack",
         account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
         region=os.getenv('CDK_DEFAULT_REGION')
         ),
-    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Collection stack Multiple Loadbalancers (SO9262)"
-    )
-
-server_side_tagger_single_LB_stack = ServerSideTagger1LBStack(app, "ServerSideTagger1LBStack",
-
-    env=cdk.Environment(
-        account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
-        region=os.getenv('CDK_DEFAULT_REGION')
-        ),
-    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Collection stack Single Loadbalancer (SO9262)"
+    description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Collection stack (SO9262)"
     )
 
 aws_analytics_stack = AWSAnalyticsStack(app, "AWSAnalyticsStack",
@@ -34,10 +24,10 @@ aws_analytics_stack = AWSAnalyticsStack(app, "AWSAnalyticsStack",
         account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
         region=os.getenv('CDK_DEFAULT_REGION')
         ),
-    vpc=server_side_tagger_single_LB_stack.vpc,
-    load_balancer=server_side_tagger_single_LB_stack.load_balancer,
-    cluster=server_side_tagger_single_LB_stack.ecs_cluster,
-    hosted_zone=server_side_tagger_single_LB_stack.hosted_zone,
+    vpc=server_side_tagger_stack.vpc,
+    load_balancer=server_side_tagger_stack.load_balancer,
+    cluster=server_side_tagger_stack.ecs_cluster,
+    hosted_zone=server_side_tagger_stack.hosted_zone,
     description="Guidance for Using Google Tag Manager for Server Side Website Analytics on AWS - Data Analytics stack (SO9262)"
     )
 
@@ -141,12 +131,6 @@ NagSuppressions.add_stack_suppressions(
 
 NagSuppressions.add_stack_suppressions(
     aws_analytics_stack,
-    nag_supressions,
-    apply_to_nested_stacks=True
-)
-
-NagSuppressions.add_stack_suppressions(
-    server_side_tagger_single_LB_stack,
     nag_supressions,
     apply_to_nested_stacks=True
 )

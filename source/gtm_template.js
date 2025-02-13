@@ -1,5 +1,8 @@
-// Original source code is from GTM template library https://help.stape.io/hc/en-us/articles/6093296436125-JSON-HTTP-request
 // This is a client side code that needs to be used in Google tag manager tag template
+// Original source code is made available by stape.io is the GTM template library and in github under Apache2.0
+// https://help.stape.io/hc/en-us/articles/6093296436125-JSON-HTTP-request
+// https://github.com/stape-io/json-http-request-tag
+// Line 24 is the only change
 const sendHttpRequest = require('sendHttpRequest');
 const getAllEventData = require('getAllEventData');
 const makeInteger = require('makeInteger');
